@@ -15,15 +15,15 @@ class ArborikitCConan(ConanFile):
     name = "arborikit"
     version = "0.1.0"
     license = "MIT"
-    url = "https://github.com/VOTRE_COMPTE/arborikit"
-    homepage = "https://github.com/VOTRE_COMPTE/arborikit"
+    url = "https://github.com/jojo8356/arborikit"
+    homepage = "https://github.com/jojo8356/arborikit"
     description = "General trees, unbalanced BSTs and red-black trees for C"
     topics = ("tree", "bst", "red-black", "data-structures")
     package_type = "library"
     settings = "os", "arch", "compiler", "build_type"
     options = {"shared": [True, False], "fPIC": [True, False]}
     default_options = {"shared": False, "fPIC": True}
-    exports_sources = "CMakeLists.txt", "src/*", "include/*", "cmake/*", "tests/*"
+    exports_sources = "CMakeLists.txt", "src/*", "include/*", "cmake/*", "tests/*", "LICENSE"
 
     def config_options(self):
         if self.settings.os == "Windows":
@@ -45,7 +45,7 @@ class ArborikitCConan(ConanFile):
     def package(self):
         cmake = CMake(self)
         cmake.install()
-        copy(self, "LICENSE", src=self.recipe_folder + "/..", dst=os.path.join(self.package_folder, "licenses"))
+        copy(self, "LICENSE", src=self.source_folder, dst=os.path.join(self.package_folder, "licenses"))
 
     def package_info(self):
         self.cpp_info.set_property("cmake_file_name", "arborikit")

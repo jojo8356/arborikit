@@ -34,10 +34,10 @@ classifiers = [
 test = ["pytest>=7"]
 
 [project.urls]
-Homepage = "https://github.com/VOTRE_COMPTE/arborikit"
-Repository = "https://github.com/VOTRE_COMPTE/arborikit"
-Issues = "https://github.com/VOTRE_COMPTE/arborikit/issues"
-Changelog = "https://github.com/VOTRE_COMPTE/arborikit/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/jojo8356/arborikit"
+Repository = "https://github.com/jojo8356/arborikit"
+Issues = "https://github.com/jojo8356/arborikit/issues"
+Changelog = "https://github.com/jojo8356/arborikit/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

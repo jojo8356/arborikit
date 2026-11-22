@@ -1,23 +1,31 @@
 # Publier Arborikit — commandes exactes
 
-Quatre libs, quatre registres. Remplace `VOTRE_COMPTE` par ton pseudo GitHub
-partout (`grep -rl VOTRE_COMPTE . | xargs sed -i 's/VOTRE_COMPTE/monpseudo/g'`).
+Quatre bibliothèques, plusieurs registres. Le dépôt est
+`github.com/jojo8356/arborikit` et le groupe Maven prévu est `io.github.jojo8356`.
+La publication n'est pas encore effectuée : elle nécessite les comptes et
+configurations ci-dessous. Vérifier que ces noms sont disponibles et que le
+namespace Maven est bien validé avant toute publication.
 
-Ordre recommandé : **GitHub d'abord** (les autres registres pointent vers le repo),
-puis Python → Java → C/C++ → GitHub Release.
+Le workflow de release se déclenche uniquement sur un tag `vMAJOR.MINOR.PATCH`.
+Avant de créer le tag sur le commit à publier, synchroniser les versions dans
+`python/pyproject.toml`, `python/src/arborikit/__init__.py`, `java/pom.xml`,
+les deux `CMakeLists.txt`, `c/include/arborikit/version.h` (y compris les trois
+composants numériques), les deux recettes Conan et les deux `vcpkg.json`.
+Vérifier avec `python scripts/check_release_version.py v0.1.0`. Le workflow
+refuse les versions incohérentes, mais ne remplace pas les tests préalables.
 
----
-
-## 0. Préalable : mettre le code sur GitHub
+Les publications externes sont irréversibles pour une version donnée : lancer
+les tests et la répétition TestPyPI avant de pousser le tag. Configurer d'abord
+l'environnement PyPI et les secrets Sonatype décrits plus bas. Ensuite :
 
 ```bash
-cd arborikit
-git init -b main
-git add .
-git commit -m "feat: arborikit 0.1.0 (general tree, BST, red-black tree in Python/Java/C/C++)"
-git remote add origin git@github.com:VOTRE_COMPTE/arborikit.git
-git push -u origin main
+git tag v0.1.0
+git push origin v0.1.0
 ```
+
+Les jobs PyPI et Maven s'exécutent indépendamment : vérifier chacun dans Actions.
+La release GitHub contient les archives natives même si une publication échoue.
+Maven Central exige ensuite une validation manuelle sur le Central Portal.
 
 ---
 
@@ -83,7 +91,7 @@ Dans PyPI → *Publishing* → *Add a new pending publisher* :
 | Champ | Valeur |
 |---|---|
 | PyPI Project Name | `arborikit` |
-| Owner | `VOTRE_COMPTE` |
+| Owner | `jojo8356` |
 | Repository name | `arborikit` |
 | Workflow name | `release.yml` |
 | Environment name | `pypi` |
@@ -103,18 +111,12 @@ stockée (OIDC). C'est la méthode que PyPI recommande aujourd'hui.
 
 ### 2.1 Préparer l'identité
 
-Dans `java/pom.xml`, remplace :
-
-- `groupId` : `io.github.VOTRE_COMPTE` → `io.github.monpseudo`
-- `url`, `scm`, `developer` : ton repo et ton nom
-
-Le `groupId` doit correspondre à un domaine que tu contrôles ou, comme ici,
-à `io.github.<pseudo>` (vérification par GitHub, gratuite).
-
+Le `groupId` est `io.github.jojo8356` et les URLs pointent vers ce dépôt.
+Le namespace doit être validé par son propriétaire dans Central Portal.
 ### 2.2 Compte Sonatype (Central Portal)
 
 1. <https://central.sonatype.com/> → *Sign in with GitHub*
-2. *Add namespace* → `io.github.monpseudo` → vérification automatique via GitHub
+2. *Add namespace* → `io.github.jojo8356` → vérification automatique via GitHub
 3. *Account* → *Generate User Token* → tu obtiens un `username` / `password`
 
 ### 2.3 Clé GPG (obligatoire sur Central)
@@ -156,7 +158,7 @@ Consommation ensuite :
 
 ```xml
 <dependency>
-  <groupId>io.github.monpseudo</groupId>
+  <groupId>io.github.jojo8356</groupId>
   <artifactId>arborikit</artifactId>
   <version>0.1.0</version>
 </dependency>
@@ -171,35 +173,6 @@ cd java
 mvn -B versions:set -DnewVersion=0.2.0-SNAPSHOT
 mvn -B clean install                     # dispo dans ~/.m2 pour tes autres projets
 ```
-
-### 2.7 Raccourci sans compte Sonatype : JitPack
-
-Pour tester tout de suite depuis un autre projet, sans GPG ni compte :
-
-```bash
-# 1. pousser un tag sur GitHub
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-```xml
-<!-- 2. déclarer le dépôt -->
-<repositories>
-  <repository>
-    <id>jitpack.io</id>
-    <url>https://jitpack.io</url>
-  </repository>
-</repositories>
-
-<!-- 3. dépendre directement du commit/tag -->
-<dependency>
-  <groupId>com.github.VOTRE_COMPTE</groupId>
-  <artifactId>arborikit</artifactId>
-  <version>v0.1.0</version>
-</dependency>
-```
-
-JitPack compile le dépôt à la demande. Parfait pour des tests, pas pour une
-lib « officielle ».
 
 ---
 
@@ -230,6 +203,8 @@ sudo cmake --install build --prefix /usr/local
 #    /usr/local/lib/cmake/arborikit/*.cmake, /usr/local/lib/pkgconfig/arborikit.pc
 
 # C++ (header-only : rien à compiler)
+cmake -S cpp -B build_cpp -DCMAKE_BUILD_TYPE=Release
+cmake --build build_cpp -j
 sudo cmake --install build_cpp --prefix /usr/local
 # -> /usr/local/include/arborikit/*.hpp
 ```
@@ -254,7 +229,7 @@ cc mon_app.c $(pkg-config --cflags --libs arborikit) -o mon_app
 ```cmake
 include(FetchContent)
 FetchContent_Declare(arborikit
-  GIT_REPOSITORY https://github.com/VOTRE_COMPTE/arborikit.git
+  GIT_REPOSITORY https://github.com/jojo8356/arborikit.git
   GIT_TAG        v0.1.0
   SOURCE_SUBDIR  cpp)
 FetchContent_MakeAvailable(arborikit)
@@ -285,35 +260,11 @@ CMakeDeps
 CMakeToolchain
 ```
 
-Publication sur **ConanCenter** (revue manuelle, PR) :
-
-```bash
-# 1. fork + clone
-git clone https://github.com/<ton-pseudo>/conan-center-index.git
-cd conan-center-index
-
-# 2. créer recipes/arborikit/all/
-mkdir -p recipes/arborikit/all
-cp ../../arborikit/c/conanfile.py recipes/arborikit/all/
-cat > recipes/arborikit/config.yml <<'YAML'
-versions:
-  "0.1.0":
-    folder: all
-YAML
-
-# 3. tester localement avant la PR (le lint est obligatoire)
-pip install conan --upgrade
-conan create recipes/arborikit/all --version=0.1.0
-
-# 4. ouvrir la PR
-git checkout -b arborikit
-git add recipes/arborikit && git commit -m "Add arborikit/0.1.0"
-git push origin arborikit
-```
-
-Puis PR sur <https://github.com/conan-io/conan-center-index>. Délai typique :
-quelques semaines (revue humaine). Une fois mergé, `conan install arborikit/0.1.0`
-fonctionne pour tout le monde.
+Pour ConanCenter, ces recettes locales ne suffisent pas : adapter les recettes
+aux exigences de ConanCenter (téléchargement des sources par version et hash,
+`conandata.yml`, tests et structure attendue), puis ouvrir une PR sur
+<https://github.com/conan-io/conan-center-index>. Ne pas copier directement
+ces recettes locales en supposant qu'elles fonctionneront sans les sources.
 
 ### 3.5 vcpkg
 
@@ -329,7 +280,7 @@ cp ../arborikit/LICENSE ports/arborikit/
 cat > ports/arborikit/portfile.cmake <<'CMAKE'
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO VOTRE_COMPTE/arborikit
+    REPO jojo8356/arborikit
     REF "v${VERSION}"
     SHA512 0   # remplacer par le hash affiché par vcpkg, il te le donne
     HEAD_REF main
@@ -348,7 +299,7 @@ cat > ports/arborikit/vcpkg.json <<'JSON'
   "name": "arborikit",
   "version": "0.1.0",
   "description": "General trees, unbalanced BSTs and red-black trees for C",
-  "homepage": "https://github.com/VOTRE_COMPTE/arborikit",
+  "homepage": "https://github.com/jojo8356/arborikit",
   "license": "MIT",
   "dependencies": [
     { "name": "vcpkg-cmake", "host": true },
@@ -396,7 +347,8 @@ cd cpp && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 
 # ---------- TOUT EN UN COUP (après tag) ----------
 git tag v0.1.0 && git push origin v0.1.0
-# -> release.yml publie PyPI + Maven Central + les 2 archives GitHub
+# -> release.yml publie PyPI, envoie Java au Central Portal et crée les archives GitHub
+# -> vérifier les jobs puis publier manuellement le bundle sur Central Portal
 ```
 
 ---

@@ -4,14 +4,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.github.VOTRE_COMPTE</groupId>
+  <groupId>io.github.jojo8356</groupId>
   <artifactId>arborikit</artifactId>
   <version>0.1.0</version>
   <packaging>jar</packaging>
 
   <name>Arborikit</name>
   <description>General trees, unbalanced BSTs and red-black trees for Java. Zero dependencies.</description>
-  <url>https://github.com/VOTRE_COMPTE/arborikit</url>
+  <url>https://github.com/jojo8356/arborikit</url>
 
   <licenses>
     <license>
@@ -23,22 +23,23 @@
 
   <developers>
     <developer>
-      <name>Votre Nom</name>
-      <email>vous@example.com</email>
-      <organizationUrl>https://github.com/VOTRE_COMPTE</organizationUrl>
+      <name>Arborikit contributors</name>
+      <organizationUrl>https://github.com/jojo8356</organizationUrl>
     </developer>
   </developers>
 
   <scm>
-    <connection>scm:git:git://github.com/VOTRE_COMPTE/arborikit.git</connection>
-    <developerConnection>scm:git:ssh://github.com/VOTRE_COMPTE/arborikit.git</developerConnection>
-    <url>https://github.com/VOTRE_COMPTE/arborikit</url>
-    <tag>v0.1.0</tag>
+    <connection>scm:git:git://github.com/jojo8356/arborikit.git</connection>
+    <developerConnection>scm:git:ssh://github.com/jojo8356/arborikit.git</developerConnection>
+    <url>https://github.com/jojo8356/arborikit</url>
+    <tag>v${project.version}</tag>
   </scm>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.release>8</maven.compiler.release>
+    <!-- JDK 8 ne reconnaît pas l’option release, notamment dans l'outil javadoc. -->
+    <maven.compiler.source>8</maven.compiler.source>
+    <maven.compiler.target>8</maven.compiler.target>
     <junit.version>5.10.2</junit.version>
     <!-- Rempli par release.yml : jamais de -SNAPSHOT sur Central -->
     <revision>0.1.0</revision>
@@ -98,6 +99,15 @@
   </build>
 
   <profiles>
+    <!-- Sur JDK 9+, l’option release vérifie aussi les API disponibles en Java 8. -->
+    <profile>
+      <id>java-8-api-on-newer-jdk</id>
+      <activation><jdk>[9,)</jdk></activation>
+      <properties>
+        <maven.compiler.release>8</maven.compiler.release>
+      </properties>
+    </profile>
+
     <!-- Publication Maven Central via Sonatype -->
     <profile>
       <id>release</id>

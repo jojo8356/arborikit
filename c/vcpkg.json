@@ -2,7 +2,7 @@
   "name": "arborikit",
   "version": "0.1.0",
   "description": "General trees, unbalanced BSTs and red-black trees for C",
-  "homepage": "https://github.com/VOTRE_COMPTE/arborikit",
+  "homepage": "https://github.com/jojo8356/arborikit",
   "license": "MIT",
   "dependencies": []
 }

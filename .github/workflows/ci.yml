@@ -9,7 +9,8 @@ on:
 jobs:
   python:
     name: Python ${{ matrix.python }}
-    runs-on: ubuntu-latest
+    # Python 3.9 n'est pas fourni par setup-python sur Ubuntu 26.04.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:

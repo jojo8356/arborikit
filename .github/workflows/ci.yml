@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.11", "3.13"]
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+      - name: Tests
+        run: python -m pytest tests -q
+      - name: Build sdist + wheel
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+
+  java:
+    name: Java ${{ matrix.java }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["8", "11", "17", "21"]
+    defaults:
+      run:
+        working-directory: java
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+      - name: Tests + package
+        run: mvn -B --no-transfer-progress verify
+
+  c:
+    name: C (${{ matrix.cc }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests stricts (-Werror)
+        run: |
+          cd c
+          ${{ matrix.cc }} -std=c99 -Wall -Wextra -Werror -pedantic -O2 \
+            -Iinclude tests/test_arborikit.c src/general_tree.c src/bst.c src/rbtree.c \
+            -o /tmp/test_c
+          /tmp/test_c
+      - name: Tests ASan + UBSan
+        run: |
+          cd c
+          ${{ matrix.cc }} -std=c99 -g -fsanitize=address,undefined \
+            -Iinclude tests/test_arborikit.c src/general_tree.c src/bst.c src/rbtree.c \
+            -o /tmp/test_c_asan
+          /tmp/test_c_asan
+      - name: CMake build + ctest + install
+        run: |
+          cmake -S c -B /tmp/build_c -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/build_c -j
+          (cd /tmp/build_c && ctest --output-on-failure)
+          cmake --install /tmp/build_c --prefix /tmp/install_c
+          test -f /tmp/install_c/lib/pkgconfig/arborikit.pc
+
+  cpp:
+    name: C++ (${{ matrix.cxx }}, ${{ matrix.std }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { cxx: g++,     std: c++11, cmake_std: "11" }
+          - { cxx: g++,     std: c++17, cmake_std: "17" }
+          - { cxx: g++,     std: c++20, cmake_std: "20" }
+          - { cxx: clang++, std: c++11, cmake_std: "11" }
+          - { cxx: clang++, std: c++20, cmake_std: "20" }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests stricts (-Werror)
+        run: |
+          cd cpp
+          ${{ matrix.cxx }} -std=${{ matrix.std }} -Wall -Wextra -Werror -pedantic -O2 \
+            -Iinclude tests/test_arborikit.cpp -o /tmp/test_cpp
+          /tmp/test_cpp
+      - name: CMake build + ctest + install
+        run: |
+          cmake -S cpp -B /tmp/build_cpp -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=${{ matrix.cmake_std }}
+          cmake --build /tmp/build_cpp -j
+          (cd /tmp/build_cpp && ctest --output-on-failure)
+          cmake --install /tmp/build_cpp --prefix /tmp/install_cpp
+          test -d /tmp/install_cpp/include/arborikit
+
+  consumer:
+    name: Consumer smoke test (find_package)
+    runs-on: ubuntu-latest
+    needs: [c, cpp]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install both libraries
+        run: |
+          cmake -S c -B /tmp/bc -DCMAKE_BUILD_TYPE=Release -DARBORIKIT_BUILD_TESTS=OFF
+          cmake --build /tmp/bc -j && cmake --install /tmp/bc --prefix "$PWD/_inst"
+          cmake -S cpp -B /tmp/bcpp -DCMAKE_BUILD_TYPE=Release -DARBORIKIT_BUILD_TESTS=OFF
+          cmake --build /tmp/bcpp -j && cmake --install /tmp/bcpp --prefix "$PWD/_inst"
+      - name: Build consumer project
+        run: |
+          mkdir -p /tmp/consumer && cd /tmp/consumer
+          cat > CMakeLists.txt <<'CML'
+          cmake_minimum_required(VERSION 3.15)
+          project(consumer LANGUAGES C CXX)
+          find_package(arborikit 0.1 REQUIRED)
+          find_package(arborikit_cpp 0.1 REQUIRED)
+          add_executable(c_demo main.c)
+          target_link_libraries(c_demo PRIVATE arborikit::arborikit)
+          add_executable(cpp_demo main.cpp)
+          target_link_libraries(cpp_demo PRIVATE arborikit::cpp)
+          CML
+          cat > main.c <<'CSRC'
+          #include <arborikit/rbtree.h>
+          #include <stdio.h>
+          int main(void) {
+              rb_tree *t = rb_create(NULL);
+              rb_insert(t, (void *)5);
+              rb_insert(t, (void *)3);
+              printf("C ok size=%zu min=%ld\n", rb_size(t), (long)rb_min(t));
+              rb_destroy(t);
+              return 0;
+          }
+          CSRC
+          cat > main.cpp <<'CXXSRC'
+          #include <arborikit/arborikit.hpp>
+          #include <iostream>
+          int main() {
+              arborikit::RBTree<int> t{5, 3, 7};
+              t.validate();
+              std::cout << "C++ ok size=" << t.size() << '\n';
+          }
+          CXXSRC
+          cmake -S . -B build -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/_inst"
+          cmake --build build
+          ./build/c_demo && ./build/cpp_demo

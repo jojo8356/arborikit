@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+
+# Java
+target/
+*.class
+*.jar
+
+# C / C++
+build/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.dylib
+CMakeCache.txt
+CMakeFiles/
+Testing/
+compile_commands.json
+
+# Divers
+_tmp/
+.DS_Store

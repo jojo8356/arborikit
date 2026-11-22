@@ -1,0 +1,173 @@
+name: Release
+
+# Déclenchement : pousser un tag de la forme v0.1.0
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Ce workflow publie les 4 artefacts :
+#   - Python : PyPI (trusted publishing, aucune clé API stockée)
+#   - Java   : Maven Central via Sonatype Central Portal
+#   - C      : tarball + header sur GitHub Releases
+#   - C++    : tarball + headers sur GitHub Releases
+# puis crée une GitHub Release avec les 4 archives.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version à publier (ex: 0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  version:
+    name: Résolution de la version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+  python:
+    name: Publier sur PyPI
+    needs: version
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/arborikit
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Synchroniser la version
+        run: |
+          python - <<'PY'
+          import re, pathlib
+          version = "${{ needs.version.outputs.version }}"
+          path = pathlib.Path("pyproject.toml")
+          text = path.read_text()
+          text = re.sub(r'^version = ".*"$', f'version = "{version}"', text, count=1, flags=re.M)
+          path.write_text(text)
+          init = pathlib.Path("src/arborikit/__init__.py")
+          src = init.read_text()
+          src = re.sub(r'__version__ = ".*"', f'__version__ = "{version}"', src)
+          init.write_text(src)
+          print("version ->", version)
+          PY
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
+      - name: Publier (trusted publishing OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: python/dist/*
+
+  java:
+    name: Publier sur Maven Central
+    needs: version
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: java
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Définir la version de release
+        run: mvn -B --no-transfer-progress versions:set -DnewVersion=${{ needs.version.outputs.version }} -DgenerateBackupPoms=false
+      - name: Tests + publication
+        env:
+          MAVEN_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: mvn -B --no-transfer-progress -P release deploy
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java-jar
+          path: java/target/arborikit-*.jar
+
+  native:
+    name: Archives C et C++
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive C
+        run: |
+          cd c
+          tar --exclude-vcs -czf "../arborikit-c-${{ needs.version.outputs.version }}.tar.gz" \
+            CMakeLists.txt cmake include src tests conanfile.py vcpkg.json LICENSE
+      - name: Archive C++ (header-only)
+        run: |
+          cd cpp
+          tar --exclude-vcs -czf "../arborikit-cpp-${{ needs.version.outputs.version }}.tar.gz" \
+            CMakeLists.txt cmake include tests conanfile.py vcpkg.json LICENSE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-archives
+          path: arborikit-*.tar.gz
+
+  github-release:
+    name: GitHub Release
+    needs: [version, python, native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Créer la release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: Arborikit v${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            artifacts/native-archives/*.tar.gz
+            artifacts/python-dist/*
+
+  conan-hint:
+    name: Rappel publication Conan
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Étapes manuelles restantes
+        run: |
+          echo "============================================================"
+          echo "Publication automatique terminée."
+          echo ""
+          echo "Restent deux étapes manuelles (pas d'API de publication) :"
+          echo "1. ConanCenter (C et C++) : PR sur https://github.com/conan-io/conan-center-index"
+          echo "   avec les recettes c/conanfile.py et cpp/conanfile.py."
+          echo "2. vcpkg : PR sur https://github.com/microsoft/vcpkg"
+          echo "   avec les ports dérivés de c/vcpkg.json et cpp/vcpkg.json."
+          echo ""
+          echo "Tout le reste (PyPI, Maven Central, GitHub Releases) est publié."
+          echo "============================================================"

@@ -13,13 +13,13 @@ class ArborikitCppConan(ConanFile):
     name = "arborikit-cpp"
     version = "0.1.0"
     license = "MIT"
-    url = "https://github.com/VOTRE_COMPTE/arborikit"
-    homepage = "https://github.com/VOTRE_COMPTE/arborikit"
+    url = "https://github.com/jojo8356/arborikit"
+    homepage = "https://github.com/jojo8356/arborikit"
     description = "General trees, unbalanced BSTs and red-black trees for C++ (header-only)"
     topics = ("tree", "bst", "red-black", "header-only", "data-structures")
     package_type = "header-library"
     settings = "os", "arch", "compiler", "build_type"
-    exports_sources = "CMakeLists.txt", "include/*", "cmake/*", "tests/*"
+    exports_sources = "CMakeLists.txt", "include/*", "cmake/*", "tests/*", "LICENSE"
     no_copy_source = True
 
     def layout(self):
@@ -37,7 +37,7 @@ class ArborikitCppConan(ConanFile):
         cmake = CMake(self)
         cmake.configure()
         cmake.install()
-        copy(self, "LICENSE", src=self.recipe_folder + "/..", dst=os.path.join(self.package_folder, "licenses"))
+        copy(self, "LICENSE", src=self.source_folder, dst=os.path.join(self.package_folder, "licenses"))
 
     def package_info(self):
         self.cpp_info.set_property("cmake_file_name", "arborikit_cpp")

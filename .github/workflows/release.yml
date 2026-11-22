@@ -8,16 +8,11 @@ name: Release
 #   - Java   : Maven Central via Sonatype Central Portal
 #   - C      : tarball + header sur GitHub Releases
 #   - C++    : tarball + headers sur GitHub Releases
-# puis crée une GitHub Release avec les 4 archives.
+# puis crée une GitHub Release avec les archives natives.
 
 on:
   push:
     tags: ["v*.*.*"]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version à publier (ex: 0.1.0)"
-        required: true
 
 permissions:
   contents: write
@@ -30,13 +25,15 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Vérifier les versions des paquets
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/check_release_version.py "$RELEASE_TAG"
       - id: v
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          fi
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
 
   python:
     name: Publier sur PyPI
@@ -53,21 +50,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Synchroniser la version
-        run: |
-          python - <<'PY'
-          import re, pathlib
-          version = "${{ needs.version.outputs.version }}"
-          path = pathlib.Path("pyproject.toml")
-          text = path.read_text()
-          text = re.sub(r'^version = ".*"$', f'version = "{version}"', text, count=1, flags=re.M)
-          path.write_text(text)
-          init = pathlib.Path("src/arborikit/__init__.py")
-          src = init.read_text()
-          src = re.sub(r'__version__ = ".*"', f'__version__ = "{version}"', src)
-          init.write_text(src)
-          print("version ->", version)
-          PY
       - name: Build
         run: |
           python -m pip install --upgrade pip build twine
@@ -101,8 +83,6 @@ jobs:
           server-password: MAVEN_PASSWORD
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
-      - name: Définir la version de release
-        run: mvn -B --no-transfer-progress versions:set -DnewVersion=${{ needs.version.outputs.version }} -DgenerateBackupPoms=false
       - name: Tests + publication
         env:
           MAVEN_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
@@ -137,7 +117,7 @@ jobs:
 
   github-release:
     name: GitHub Release
-    needs: [version, python, native]
+    needs: [version, native]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -151,7 +131,6 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/native-archives/*.tar.gz
-            artifacts/python-dist/*
 
   conan-hint:
     name: Rappel publication Conan
@@ -169,5 +148,5 @@ jobs:
           echo "2. vcpkg : PR sur https://github.com/microsoft/vcpkg"
           echo "   avec les ports dérivés de c/vcpkg.json et cpp/vcpkg.json."
           echo ""
-          echo "Tout le reste (PyPI, Maven Central, GitHub Releases) est publié."
+          echo "Vérifier les jobs PyPI et Java séparément. Sur Central Portal, valider la publication manuellement."
           echo "============================================================"

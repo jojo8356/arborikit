@@ -67,7 +67,7 @@ print(rb)                         # 50(N) / 30(R) / ...
 
 ```xml
 <dependency>
-  <groupId>io.github.VOTRE_COMPTE</groupId>
+  <groupId>io.github.jojo8356</groupId>
   <artifactId>arborikit</artifactId>
   <version>0.1.0</version>
 </dependency>
